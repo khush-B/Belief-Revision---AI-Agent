@@ -149,6 +149,10 @@ class BeliefBase:
         """
         from resolution import entails as _entails   # local import avoids cycle
 
+        # If the base does not entail phi, no removal is needed.
+        if not _entails(self.formulas(), phi):
+            return []
+
         sorted_entries = sorted(self._entries, key=lambda e: (-e[1], -e[2]))
         remaining = list(self._entries)
         removed: List[Formula] = []
