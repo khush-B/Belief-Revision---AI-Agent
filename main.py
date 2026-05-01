@@ -1,8 +1,12 @@
 """
 main.py — Belief Revision Agent Demo
 =====================================
-Demonstrates Member B's logical entailment engine plus the full pipeline
-(Members A + B + C integrated).
+Demonstrates the full pipeline:
+  Member A  — Ordered belief base with priority / entrenchment
+  Member B  — CNF conversion + resolution-based logical entailment
+  Member C  — Expand / contract / revise engine, AGM postulates
+  Optional 1 — Plausibility-order possible-worlds belief revision
+  Optional 2 — Mastermind AI using belief revision as the reasoning core
 
 Run:
     cd "Belief-Revision agent"
@@ -18,6 +22,9 @@ from formula import Atom, Not, And, Or, Implies, Biconditional
 from parser import parse
 from resolution import entails
 from belief_base import BeliefBase
+from revision_engine import RevisionEngine
+from plausibility_order import PlausibilityOrder
+from mastermind import MastermindAgent, play_mastermind, score
 
 
 # ---------------------------------------------------------------------------
@@ -181,17 +188,134 @@ def demo_agm_patterns() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# Demo 6 — Revision Engine (Member C)
 # ---------------------------------------------------------------------------
+
+def demo_revision_engine() -> None:
+    section("Demo 6 — Revision Engine: expand / contract / revise (Member C)")
+
+    rain  = Atom('rain')
+    sunny = Atom('sunny')
+    coat  = Atom('coat')
+
+    bb = BeliefBase()
+    bb.add(rain,                   priority=0)   # strongly believe it's raining
+    bb.add(Implies(rain, coat),    priority=0)   # rain → wear a coat
+    bb.add(Not(sunny),             priority=5)   # weakly believe not sunny
+
+    eng = RevisionEngine(bb)
+
+    show("Before revision: base ⊨ coat  (rain → coat, rain in base)",
+         entails(eng.bb.formulas(), coat))
+    show("Before revision: base ⊨ ¬sunny",
+         entails(eng.bb.formulas(), Not(sunny)))
+
+    print("\n  → Revising: new weather report says it is sunny (¬rain)\n")
+    eng.revise(Not(rain))
+
+    show("After revise(¬rain): base ⊨ ¬rain",
+         entails(eng.bb.formulas(), Not(rain)))
+    show("After revise(¬rain): base is consistent",
+         eng.is_consistent())
+
+    print("\n  → Contracting away 'coat'...\n")
+    eng.contract(coat)
+    show("After contract(coat): base ⊭ coat",
+         not entails(eng.bb.formulas(), coat))
+
+    print()
+    print("  AGM Postulates demonstrated:")
+    show("  K*1 Success:      revise(¬rain) → base ⊨ ¬rain",
+         entails(eng.bb.formulas(), Not(rain)))
+    show("  K*4 Consistency:  base is consistent after revision",
+         eng.is_consistent())
+
+
+# ---------------------------------------------------------------------------
+# Demo 7 — Plausibility Order (Optional Task 1)
+# ---------------------------------------------------------------------------
+
+def demo_plausibility_order() -> None:
+    section("Demo 7 — Plausibility Order / Possible-Worlds Revision (Optional 1)")
+
+    atoms = ['rain', 'wet', 'bus']
+    po = PlausibilityOrder(atoms)
+
+    rain = Atom('rain')
+    wet  = Atom('wet')
+    bus  = Atom('bus')
+
+    print("  Initial state: all 8 worlds equally plausible (rank 0)\n")
+    show("  {} ⊨ rain?  (no beliefs yet — should be False)",
+         po.entails(rain))
+
+    print("\n  → Asserting: rain → wet\n")
+    po.assert_belief(Implies(rain, wet))
+    show("  After rain→wet: ⊨ (rain→wet)?", po.entails(Implies(rain, wet)))
+
+    print("\n  → Asserting: rain\n")
+    po.assert_belief(rain)
+    show("  After rain: ⊨ rain?",    po.entails(rain))
+    show("  After rain: ⊨ wet?",     po.entails(wet))
+
+    print("\n  Most plausible worlds after asserting rain:")
+    for w in po.most_plausible():
+        print(f"    {po.world_to_str(w)}")
+
+    print("\n  → Revision: new evidence — it is NOT raining\n")
+    po.revise(Not(rain))
+
+    show("  After revise(¬rain): ⊨ ¬rain?", po.entails(Not(rain)))
+    show("  After revise(¬rain): min worlds all satisfy ¬rain?",
+         all('rain' not in w for w in po.most_plausible()))
+
+    print("\n  Most plausible worlds after revise(¬rain):")
+    for w in po.most_plausible():
+        print(f"    {po.world_to_str(w)}")
+
+
+# ---------------------------------------------------------------------------
+# Demo 8 — Mastermind AI (Optional Task 2)
+# ---------------------------------------------------------------------------
+
+def demo_mastermind() -> None:
+    section("Demo 8 — Mastermind AI via Belief Revision (Optional 2)")
+
+    print("  The agent maintains a belief base of 1296 candidate codes.")
+    print("  Feedback from each guess is treated as a revision: impossible")
+    print("  codes are contracted from the belief state.\n")
+
+    test_cases = [
+        (1, 2, 3, 4),
+        (6, 6, 5, 5),
+        (3, 1, 4, 2),
+    ]
+
+    for secret in test_cases:
+        print(f"  Secret: {secret}")
+        n = play_mastermind(secret, verbose=True)
+        print()
+
+    print("  Belief-revision mapping:")
+    print("    • Initial state:  all 1296 codes believed possible")
+    print("    • Each feedback:  inconsistent codes contracted (¬code_i added)")
+    print("    • make_guess():   pick a code still believed possible (minimax)")
+    print("    • Solved when:    exactly 1 code remains in the belief base")
+
+
+
 
 if __name__ == '__main__':
     print("\n*** Belief Revision Agent — Implementation Demo ***")
-    print("    02180 Intro to AI, SP25  |  Member B: Entailment Engine\n")
+    print("    02180 Intro to AI, SP25  |  Members A + B + C + Optionals\n")
 
     demo_basic_entailment()
     demo_cnf_trace()
     demo_belief_base()
     demo_parser()
     demo_agm_patterns()
+    demo_revision_engine()
+    demo_plausibility_order()
+    demo_mastermind()
 
     print("\n*** All demos complete ***\n")
