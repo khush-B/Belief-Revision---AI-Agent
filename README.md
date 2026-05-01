@@ -2,7 +2,10 @@
 ### 02180 Introduction to Artificial Intelligence — SP25, DTU
 
 A from-scratch propositional logic belief revision engine implementing CNF
-conversion, resolution-based entailment, and the AGM postulate framework.
+conversion, resolution-based entailment, the AGM postulate framework,
+possible-worlds plausibility ordering, and a Mastermind AI reasoning core.
+
+**235 tests — all passing.**
 
 ---
 
@@ -39,23 +42,32 @@ python --version
 ```
 Belief-Revision agent/
 │
-├── main.py                    ← runnable demo (start here)
+├── main.py                       ← runnable demo (start here — 8 demos)
 │
 ├── src/
-│   ├── formula.py             ← AST nodes: Atom, Not, And, Or, Implies, Biconditional
-│   ├── parser.py              ← string → Formula  (e.g. "p -> q")
-│   ├── cnf.py                 ← CNF conversion pipeline
-│   ├── resolution.py          ← entails(B, φ) — the core entailment function
-│   └── belief_base.py         ← BeliefBase with priority order
+│   ├── formula.py                ← AST nodes: Atom, Not, And, Or, Implies, Biconditional
+│   ├── parser.py                 ← string → Formula  (e.g. "p -> q")
+│   ├── cnf.py                    ← CNF conversion pipeline (4-pass)
+│   ├── resolution.py             ← entails(B, φ) — core entailment via resolution
+│   ├── belief_base.py            ← BeliefBase with priority / entrenchment order
+│   ├── revision_engine.py        ← expand / contract / revise (Levi identity, AGM)
+│   ├── plausibility_order.py     ← Optional 1: possible-worlds belief revision
+│   └── mastermind.py             ← Optional 2: Mastermind AI via belief revision
 │
 ├── tests/
 │   ├── __init__.py
-│   └── test_entailment.py     ← 101 tests (formula, parser, CNF, resolution, AGM)
+│   ├── test_entailment.py        ← 101 tests: formula, parser, CNF, resolution, AGM patterns
+│   ├── test_belief_base.py       ← 40 tests: BeliefBase mutation, priority, entrenchment
+│   ├── test_agm.py               ← 53 tests: full AGM K*1–K*5 and K÷1–K÷5 postulates
+│   └── test_optional.py          ← 41 tests: PlausibilityOrder and MastermindAgent
 │
-├── README.md                  ← this file
-├── MEMBER_B_REPORT.md         ← full implementation report
-├── assigment .md              ← original assignment brief
-└── taskdistribution.md        ← member task split
+├── docs/
+│   ├── assigment .md             ← original assignment brief
+│   ├── taskdistribution.md       ← member task split
+│   ├── MEMBER_B_REPORT.md        ← Khush's implementation report
+│   └── SIMPLE_GUIDE.md           ← quick-start guide
+│
+└── README.md                     ← this file
 ```
 
 ---
@@ -157,16 +169,19 @@ Set-Location "c:\Users\khush\Desktop\Artifical Intelligence lecture\Belief-Revis
 | Demo | Description |
 |------|-------------|
 | Demo 1 — Basic Entailment | Classical inference patterns: modus ponens, modus tollens, ex falso, tautology |
-| Demo 2 — CNF Clause Sets | Visually shows the CNF clause list output for 5 representative formulas |
-| Demo 3 — Ordered Belief Base | Realistic scenario (rain/fog → bus); shows priority order and `least_entrenched()` |
-| Demo 4 — Parser Round-trip | Prints each input string alongside its parsed AST, including right-associative `→` |
-| Demo 5 — AGM Postulate Patterns | Verifies the 5 required postulate patterns: Success, Inclusion, Vacuity, Consistency, Extensionality |
+| Demo 2 — CNF Clause Sets | Shows the CNF clause list output for 5 representative formulas |
+| Demo 3 — Ordered Belief Base | Realistic scenario (rain/fog → bus); priority order and `least_entrenched()` |
+| Demo 4 — Parser Round-trip | Prints each input string alongside its parsed AST |
+| Demo 5 — AGM Postulate Patterns | Verifies the 5 required postulate foundations |
+| Demo 6 — Revision Engine | Full expand / contract / revise cycle with AGM verification |
+| Demo 7 — Plausibility Order | Possible-worlds lexicographic revision (Optional Task 1) |
+| Demo 8 — Mastermind AI | Belief-revision-based codebreaker solving 3 different secrets (Optional Task 2) |
 
 ---
 
 ## 5. Running the Tests
 
-### Run all 101 tests
+### Run all 235 tests
 
 ```powershell
 # From the project root (with venv activated)
@@ -178,29 +193,24 @@ Or without activation:
 ```powershell
 $python = "c:/Users/khush/Desktop/Artifical Intelligence lecture/Belief-Revision agent/.venv/Scripts/python.exe"
 Set-Location "c:\Users\khush\Desktop\Artifical Intelligence lecture\Belief-Revision agent"
-& $python -m pytest tests/test_entailment.py -v
+& $python -m pytest tests/ -v
+```
+
+### Run a specific test file
+
+```powershell
+python -m pytest tests/test_entailment.py -v    # 101 tests — Member B (Khush)
+python -m pytest tests/test_belief_base.py -v   # 40 tests  — Member A
+python -m pytest tests/test_agm.py -v           # 53 tests  — Member C (AGM postulates)
+python -m pytest tests/test_optional.py -v      # 41 tests  — Optional Tasks 1 & 2
 ```
 
 ### Run a specific test class only
 
 ```powershell
-# Only the entailment tests
 python -m pytest tests/test_entailment.py::TestEntails -v
-
-# Only the parser tests
-python -m pytest tests/test_entailment.py::TestParser -v
-
-# Only the CNF tests
-python -m pytest tests/test_entailment.py::TestCNFConversion -v
-
-# Only the AGM pattern tests
-python -m pytest tests/test_entailment.py::TestAGMPatterns -v
-```
-
-### Run a single test by name
-
-```powershell
-python -m pytest tests/test_entailment.py::TestEntails::test_modus_ponens -v
+python -m pytest tests/test_agm.py::TestRevisionSuccess -v
+python -m pytest tests/test_optional.py::TestMastermindAgent -v
 ```
 
 ### Expected test result
@@ -208,27 +218,23 @@ python -m pytest tests/test_entailment.py::TestEntails::test_modus_ponens -v
 ```
 ============================= test session starts =============================
 platform win32 -- Python 3.12.3, pytest-9.0.3
-collected 101 items
+collected 235 items
 
-tests/test_entailment.py::TestFormulaEquality::test_atom_equal           PASSED
-tests/test_entailment.py::TestFormulaEquality::test_atom_not_equal        PASSED
+tests/test_agm.py::TestRevisionSuccess::test_success_simple           PASSED
 ...
-tests/test_entailment.py::TestAGMPatterns::test_extensionality_pattern    PASSED
+tests/test_optional.py::TestPlayMastermind::test_returns_positive_int  PASSED
 
-============================= 101 passed in 0.30s =============================
+============================ 235 passed in 12.64s ============================
 ```
 
 ### Test coverage by area
 
-| Test Class | Count | What it covers |
+| Test File | Count | What it covers |
 |-----------|-------|----------------|
-| `TestFormulaEquality` | 11 | AST equality, hashing, `atoms()` |
-| `TestParser` | 20 | All operators, precedence, Unicode, error cases |
-| `TestLiteralHelpers` | 6 | `negate_literal`, tautology detection |
-| `TestCNFConversion` | 15 | Each CNF pass, De Morgan, distributivity |
-| `TestIsUnsatisfiable` | 9 | SAT/UNSAT at clause level |
-| `TestEntails` | 20 | All inference patterns + edge cases |
-| `TestAGMPatterns` | 7 | Logical foundations of the 5 AGM postulates |
+| `test_entailment.py` | 101 | Formula AST, parser, CNF passes, resolution, AGM patterns |
+| `test_belief_base.py` | 40 | Add/remove/clear, priority order, `least_entrenched()`, Alice vs Bob |
+| `test_agm.py` | 53 | Revision K\*1–K\*5, contraction K÷1–K÷5, integration scenarios |
+| `test_optional.py` | 41 | World evaluation, plausibility order revision/contraction, Mastermind score + agent |
 
 ---
 
@@ -242,24 +248,15 @@ All source files are in `src/`. Add `src/` to your Python path or run from the p
 import sys
 sys.path.insert(0, 'src')
 
-from formula import Atom, Not, And, Or, Implies, Biconditional
+from formula import Atom, Not, And, Or, Implies
 from resolution import entails
 
-p = Atom('p')
-q = Atom('q')
-r = Atom('r')
+p, q, r = Atom('p'), Atom('q'), Atom('r')
 
-# Modus ponens: {p, p→q} ⊨ q ?
-print(entails([p, Implies(p, q)], q))          # True
-
-# Is q entailed by just p?
-print(entails([p], q))                          # False
-
-# Does a contradictory base entail everything?
-print(entails([p, Not(p)], q))                  # True  (ex falso)
-
-# Does an empty base entail a tautology?
-print(entails([], Or(p, Not(p))))               # True
+print(entails([p, Implies(p, q)], q))     # True  — modus ponens
+print(entails([p], q))                    # False — not entailed
+print(entails([p, Not(p)], q))            # True  — ex falso
+print(entails([], Or(p, Not(p))))         # True  — tautology
 ```
 
 ### Parse formulas from strings
@@ -267,12 +264,12 @@ print(entails([], Or(p, Not(p))))               # True
 ```python
 from parser import parse
 
-f1 = parse("p -> q")            # Implies(Atom('p'), Atom('q'))
-f2 = parse("~p | (q & r)")      # Or(Not(p), And(q, r))
-f3 = parse("p <-> q")           # Biconditional(p, q)
-f4 = parse("p -> q -> r")       # Implies(p, Implies(q, r))  ← right-assoc
+f1 = parse("p -> q")
+f2 = parse("~p | (q & r)")
+f3 = parse("p <-> q")
+f4 = parse("p -> q -> r")   # right-associative: p → (q → r)
 
-print(entails([f1, parse("p")], parse("q")))    # True
+print(entails([f1, parse("p")], parse("q")))   # True
 ```
 
 ### Supported formula syntax
@@ -284,39 +281,60 @@ print(entails([f1, parse("p")], parse("q")))    # True
 | Disjunction | `p \| q` | `p ∨ q` |
 | Implication | `p -> q` | `p → q` |
 | Biconditional | `p <-> q` | `p ↔ q` |
-| Grouping | `(p & q)` | |
 
 ### Use the BeliefBase with priority order
 
 ```python
 from belief_base import BeliefBase
-from resolution import entails
 
 bb = BeliefBase()
+bb.add(Implies(Or(Atom('rain'), Atom('fog')), Atom('bus')), priority=0)  # background
+bb.add(Atom('rain'), priority=5)                                          # observation
 
-# Priority 0 = most entrenched (background knowledge)
-bb.add(Implies(Or(Atom('rain'), Atom('fog')), Atom('bus')), priority=0)
-
-# Priority 5 = less entrenched (recent observation, first to be dropped)
-bb.add(Atom('rain'), priority=5)
-
-# Check entailment against the full base
-print(entails(bb.formulas(), Atom('bus')))      # True
-
-# Find the formula to remove first during contraction
-print(bb.least_entrenched())                    # rain
+print(entails(bb.formulas(), Atom('bus')))   # True
+print(bb.least_entrenched())                 # rain  (priority=5, removed first)
 ```
 
-### Inspect CNF clauses directly
+### Expand, contract, and revise (AGM)
 
 ```python
-from cnf import to_cnf_clauses
+from belief_base import BeliefBase
+from revision_engine import RevisionEngine
 
-clauses = to_cnf_clauses(Implies(Atom('p'), Atom('q')))
-print(clauses)   # [frozenset({'~p', 'q'})]
+bb = BeliefBase()
+bb.add(Atom('rain'), priority=0)
+bb.add(Implies(Atom('rain'), Atom('wet')), priority=0)
+eng = RevisionEngine(bb)
 
-clauses = to_cnf_clauses(parse("p <-> q"))
-print(clauses)   # [frozenset({'~p', 'q'}), frozenset({'~q', 'p'})]
+print(entails(eng.bb.formulas(), Atom('wet')))    # True
+
+eng.revise(Not(Atom('rain')))                      # new evidence: no rain
+print(entails(eng.bb.formulas(), Not(Atom('rain'))))  # True
+print(eng.is_consistent())                         # True
+```
+
+### Plausibility order (Optional Task 1)
+
+```python
+from plausibility_order import PlausibilityOrder
+
+po = PlausibilityOrder(['rain', 'wet'])
+po.assert_belief(Implies(Atom('rain'), Atom('wet')))
+po.assert_belief(Atom('rain'))
+
+print(po.entails(Atom('wet')))            # True
+
+po.revise(Not(Atom('rain')))
+print(po.entails(Not(Atom('rain'))))      # True
+```
+
+### Mastermind AI (Optional Task 2)
+
+```python
+from mastermind import play_mastermind
+
+n = play_mastermind((3, 1, 4, 2), verbose=True)
+print(f"Solved in {n} guesses")
 ```
 
 ---
